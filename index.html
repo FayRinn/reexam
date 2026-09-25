@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Переэкзаменовка — запись</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>📋 Запись на переэкзаменовку</h1>
+    
+    <!-- Объявления -->
+    <div id="announcements"></div>
+    
+    <!-- Загрузка -->
+    <div id="loading" class="loading">Загрузка данных...</div>
+    
+    <!-- ШАГ 1: ФИО + Группа -->
+    <div id="step1" class="step" style="display:none;">
+        <p class="subtitle">Введите ваши данные</p>
+        
+        <div class="form-group">
+            <label>ФИО</label>
+            <input type="text" id="fio" placeholder="Иванов Иван Иванович" autocomplete="off">
+        </div>
+        
+        <div class="form-group">
+            <label>Группа</label>
+            <select id="groupSelect">
+                <option value="">— Выберите —</option>
+            </select>
+            <input type="text" id="groupOther" placeholder="Впишите вашу группу" style="display:none; margin-top:8px;">
+        </div>
+        
+        <button id="continueBtn" disabled>Продолжить</button>
+    </div>
+    
+    <!-- ШАГ 2: Дисциплина -->
+    <div id="step2" class="step" style="display:none;">
+        <div class="user-info">
+            <span id="userInfo"></span>
+            <button id="editUserBtn" type="button" class="btn-link">✏️ Изменить</button>
+        </div>
+        
+        <div class="form-group">
+            <label>Дисциплина</label>
+            <select id="disciplineSelect">
+                <option value="">— Выберите —</option>
+            </select>
+        </div>
+        
+        <div id="disciplineInfo" class="info-box" style="display:none;"></div>
+        <div id="disciplineAnnouncements"></div>
+        
+        <div id="closedMessage" class="closed-box" style="display:none;"></div>
+        
+        <button id="registerBtn" disabled style="display:none;">Записаться</button>
+        
+        <button id="checkMyBtn" class="btn-secondary" style="margin-top:16px;">🔍 Проверить мои записи</button>
+    </div>
+    
+    <!-- ШАГ 3: Успех -->
+    <div id="step3" class="step" style="display:none;">
+        <div class="success-box">
+            <div class="success-icon">✅</div>
+            <div class="success-title">Вы записаны!</div>
+            
+            <div class="success-info">
+                <div><strong>ФИО:</strong> <span id="successFio"></span></div>
+                <div><strong>Группа:</strong> <span id="successGroup"></span></div>
+                <div><strong>Дисциплина:</strong> <span id="successDiscipline"></span></div>
+                <div><strong>Статус:</strong> На проверке</div>
+            </div>
+            
+            <div class="success-note">
+                Проверка допуска выполняется администратором.<br>
+                После распределения появятся день и время.
+            </div>
+        </div>
+        
+        <button id="anotherBtn">📚 Записаться на другую дисциплину</button>
+        <button id="checkMyBtn2" class="btn-secondary">🔍 Проверить мои записи</button>
+    </div>
+    
+    <!-- ШАГ 4: Мои записи -->
+    <div id="step4" class="step" style="display:none;">
+        <div class="user-info">
+            <span id="userInfo2"></span>
+            <button id="editUserBtn2" type="button" class="btn-link">✏️ Изменить</button>
+        </div>
+        
+        <h2>Мои записи</h2>
+        
+        <div id="myRecords">
+            <div class="loading">Поиск записей...</div>
+        </div>
+        
+        <button id="backBtn" class="btn-secondary">← Назад к записи</button>
+    </div>
+    
+    <!-- Сообщение -->
+    <div id="message"></div>
+</div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
