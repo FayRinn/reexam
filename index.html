@@ -11,10 +11,8 @@
 <div class="container">
     <h1>📋 Запись на переэкзаменовку</h1>
     
-    <!-- Объявления -->
     <div id="announcements"></div>
     
-    <!-- Загрузка -->
     <div id="loading" class="loading">Загрузка данных...</div>
     
     <!-- ШАГ 1: ФИО + Группа -->
@@ -35,6 +33,10 @@
         </div>
         
         <button id="continueBtn" disabled>Продолжить</button>
+        
+        <button id="checkOnlyBtn" class="btn-secondary" style="margin-top:8px;">
+            🔍 Посмотреть мои записи (без записи)
+        </button>
     </div>
     
     <!-- ШАГ 2: Дисциплина -->
@@ -100,7 +102,6 @@
         <button id="backBtn" class="btn-secondary">← Назад к записи</button>
     </div>
     
-    <!-- Сообщение -->
     <div id="message"></div>
 </div>
 
