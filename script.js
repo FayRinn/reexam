@@ -12,7 +12,6 @@ let allData = {
     disciplines: [],
     groups: [],
     announcements: [],
-    counts: {},
     currentDate: ''
 };
 
@@ -396,15 +395,19 @@ document.getElementById('registerBtn').addEventListener('click', async function(
             throw new Error('Сервер временно недоступен. Попробуйте через минуту.');
         }
 
-        if (result.success) {
-            document.getElementById('step2').style.display = 'none';
-            document.getElementById('step3').style.display = 'block';
+if (result.success) {
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step3').style.display = 'block';
 
-            document.getElementById('successFio').textContent = userData.fio;
-            document.getElementById('successGroup').textContent = userData.group;
-            document.getElementById('successDiscipline').textContent = currentDiscipline;
+    document.getElementById('successFio').textContent = userData.fio;
+    document.getElementById('successGroup').textContent = userData.group;
+    document.getElementById('successDiscipline').textContent = currentDiscipline;
 
-        } else if (result.duplicate) {
+    // Сбрасываем кэш браузера — данные устарели
+    sessionStorage.removeItem('pereeks_data');
+    sessionStorage.removeItem('pereeks_data_time');
+
+} else if (result.duplicate) {
             showMessage('⚠️ Вы уже записаны на эту дисциплину', 'info');
             btn.disabled = false;
             btn.textContent = 'Записаться';
