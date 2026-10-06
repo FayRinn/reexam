@@ -2,7 +2,6 @@
 // ============ КОНФИГУРАЦИЯ ==================================
 // ============================================================
 
-// ⚠️ URL вашего Web App
 const API_URL = 'https://script.google.com/macros/s/AKfycbwuvHN3m_qBZwO-IGgdSM1WFDqugJxkkSWqXpu-jcbtEVT2ka6MP0VHKIIL_WA2VFwaAg/exec';
 
 // ============================================================
@@ -46,15 +45,14 @@ async function loadData() {
         
         allData = data;
         
-        // Загрузка сохранённых данных
-        const saved = localStorage.getItem('pereeks_user');
+        // ⚠️ sessionStorage — данные живут до закрытия вкладки
+        const saved = sessionStorage.getItem('pereeks_user');
         if (saved) {
             try {
                 userData = JSON.parse(saved);
             } catch (e) {}
         }
         
-        // Показать шаг 1
         document.getElementById('loading').style.display = 'none';
         document.getElementById('step1').style.display = 'block';
         
@@ -62,7 +60,6 @@ async function loadData() {
         populateGroups();
         restoreUserData();
         
-        // Если данные уже есть — идём на шаг 2
         if (userData.fio && userData.group) {
             goToStep2();
         }
@@ -177,9 +174,22 @@ document.getElementById('continueBtn').addEventListener('click', function() {
     userData.fio = fio;
     userData.group = group;
     
-    localStorage.setItem('pereeks_user', JSON.stringify(userData));
+    // ⚠️ sessionStorage вместо localStorage
+    sessionStorage.setItem('pereeks_user', JSON.stringify(userData));
     
     goToStep2();
+});
+
+// ⚠️ НОВАЯ КНОПКА: посмотреть записи без записи
+document.getElementById('checkOnlyBtn').addEventListener('click', function() {
+    const fio = document.getElementById('fio').value.trim();
+    
+    if (!fio) {
+        showMessage('❌ Введите ФИО', 'error');
+        return;
+    }
+    
+    findRecordsByFio(fio);
 });
 
 // ============================================================
@@ -290,7 +300,6 @@ document.getElementById('registerBtn').addEventListener('click', async function(
     showMessage('⏳ Отправляем запись...', 'info');
     
     try {
-        // ⚠️ ВАЖНО: Content-Type: text/plain — чтобы избежать CORS preflight
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
@@ -333,7 +342,7 @@ document.getElementById('registerBtn').addEventListener('click', async function(
         }
         
     } catch (err) {
-        console.error('Ошибка при отправке:', err);
+        console.error('Ошибка:', err);
         showMessage('❌ ' + err.message, 'error');
         btn.disabled = false;
         btn.textContent = 'Записаться';
@@ -354,8 +363,17 @@ document.getElementById('anotherBtn').addEventListener('click', function() {
     document.getElementById('message').textContent = '';
 });
 
-document.getElementById('checkMyBtn').addEventListener('click', goToStep4);
-document.getElementById('checkMyBtn2').addEventListener('click', goToStep4);
+document.getElementById('checkMyBtn').addEventListener('click', function() {
+    if (userData.fio && userData.group) {
+        goToStep4(userData.fio, userData.group);
+    }
+});
+
+document.getElementById('checkMyBtn2').addEventListener('click', function() {
+    if (userData.fio && userData.group) {
+        goToStep4(userData.fio, userData.group);
+    }
+});
 
 document.getElementById('editUserBtn').addEventListener('click', function() {
     document.getElementById('step2').style.display = 'none';
@@ -373,29 +391,28 @@ document.getElementById('editUserBtn2').addEventListener('click', function() {
 // ============ ШАГ 4: МОИ ЗАПИСИ =============================
 // ============================================================
 
-async function goToStep4() {
+async function goToStep4(fio, group) {
     document.getElementById('step1').style.display = 'none';
     document.getElementById('step2').style.display = 'none';
     document.getElementById('step3').style.display = 'none';
     document.getElementById('step4').style.display = 'block';
     
     document.getElementById('userInfo2').textContent = 
-        userData.fio + ' | ' + userData.group;
+        fio + (group ? ' | ' + group : '');
     
     document.getElementById('myRecords').innerHTML = 
         '<div class="loading">Поиск записей...</div>';
     
     try {
-        // ⚠️ ВАЖНО: Content-Type: text/plain
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'text/plain;charset=utf-8'
             },
             body: JSON.stringify({
-                action: 'findMy',
-                fio: userData.fio,
-                group: userData.group
+                action: 'findByFio',
+                fio: fio,
+                group: group || ''
             })
         });
         
@@ -406,6 +423,52 @@ async function goToStep4() {
             result = JSON.parse(text);
         } catch (e) {
             console.error('Ответ не JSON:', text.substring(0, 300));
+            throw new Error('Сервер временно недоступен');
+        }
+        
+        if (result.success && result.found) {
+            renderRecords(result.records);
+        } else {
+            document.getElementById('myRecords').innerHTML = 
+                '<div class="loading">Записей не найдено</div>';
+        }
+        
+    } catch (err) {
+        document.getElementById('myRecords').innerHTML = 
+            '<div class="loading">❌ ' + err.message + '</div>';
+    }
+}
+
+// ⚠️ Поиск по ФИО без группы
+async function findRecordsByFio(fio) {
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step3').style.display = 'none';
+    document.getElementById('step4').style.display = 'block';
+    
+    document.getElementById('userInfo2').textContent = fio;
+    
+    document.getElementById('myRecords').innerHTML = 
+        '<div class="loading">Поиск записей...</div>';
+    
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8'
+            },
+            body: JSON.stringify({
+                action: 'findByFio',
+                fio: fio
+            })
+        });
+        
+        const text = await response.text();
+        let result;
+        
+        try {
+            result = JSON.parse(text);
+        } catch (e) {
             throw new Error('Сервер временно недоступен');
         }
         
@@ -465,8 +528,14 @@ function renderRecords(records) {
                           s2Icon + ' ' + r.status2 + '</div>';
         }
         
+        let groupHtml = '';
+        if (r.group) {
+            groupHtml = '<div class="record-group">👥 ' + r.group + '</div>';
+        }
+        
         div.innerHTML = 
             '<div class="record-discipline">📚 ' + r.discipline + '</div>' +
+            groupHtml +
             '<div class="record-status"><b>Статус записи:</b> ' + statusIcon + ' ' + statusText + '</div>' +
             extraStatus +
             '<div class="record-details">' + details + '</div>' +
@@ -478,7 +547,13 @@ function renderRecords(records) {
 
 document.getElementById('backBtn').addEventListener('click', function() {
     document.getElementById('step4').style.display = 'none';
-    document.getElementById('step2').style.display = 'block';
+    
+    if (userData.fio && userData.group) {
+        document.getElementById('step2').style.display = 'block';
+    } else {
+        document.getElementById('step1').style.display = 'block';
+    }
+    
     document.getElementById('message').textContent = '';
 });
 
