@@ -352,6 +352,12 @@ button:disabled {
     color: #333;
 }
 
+.record-group {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 6px;
+}
+
 .record-status {
     font-size: 14px;
     margin-bottom: 8px;
@@ -384,16 +390,16 @@ button:disabled {
     body {
         padding: 10px;
     }
-    
+
     .container {
         padding: 20px;
         border-radius: 12px;
     }
-    
+
     h1 {
         font-size: 20px;
     }
-    
+
     .success-icon {
         font-size: 40px;
     }
