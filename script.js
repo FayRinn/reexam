@@ -10,7 +10,6 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwuvHN3m_qBZwO-IGgdSM1W
 
 let allData = {
     disciplines: [],
-    activeDisciplines: [],
     groups: [],
     announcements: [],
     counts: {},
@@ -25,6 +24,40 @@ let userData = {
 let currentDiscipline = null;
 
 // ============================================================
+// ============ УТИЛИТЫ =======================================
+// ============================================================
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function isDisciplineActive(disciplineName) {
+    const disc = allData.disciplines.find(d => d.name === disciplineName);
+    if (!disc || !disc.endDate) return false;
+
+    const parts = disc.endDate.split('.');
+    if (parts.length !== 3) return false;
+
+    const end = new Date(
+        parseInt(parts[2], 10),
+        parseInt(parts[1], 10) - 1,
+        parseInt(parts[0], 10)
+    );
+    end.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return today <= end;
+}
+
+// ============================================================
 // ============ ЗАГРУЗКА ДАННЫХ ===============================
 // ============================================================
 
@@ -32,7 +65,7 @@ async function loadData() {
     try {
         const response = await fetch(API_URL + '?action=getData');
         const text = await response.text();
-        
+
         let data;
         try {
             data = JSON.parse(text);
@@ -40,33 +73,32 @@ async function loadData() {
             console.error('Сервер вернул не JSON:', text.substring(0, 300));
             throw new Error('Сервер временно недоступен. Обновите страницу.');
         }
-        
+
         if (data.error) throw new Error(data.error);
-        
+
         allData = data;
-        
-        // ⚠️ sessionStorage — данные живут до закрытия вкладки
+
         const saved = sessionStorage.getItem('pereeks_user');
         if (saved) {
             try {
                 userData = JSON.parse(saved);
             } catch (e) {}
         }
-        
+
         document.getElementById('loading').style.display = 'none';
         document.getElementById('step1').style.display = 'block';
-        
+
         showAnnouncements();
         populateGroups();
         restoreUserData();
-        
+
         if (userData.fio && userData.group) {
             goToStep2();
         }
-        
+
     } catch (err) {
-        document.getElementById('loading').innerHTML = 
-            '❌ ' + err.message + 
+        document.getElementById('loading').innerHTML =
+            '❌ ' + err.message +
             '<br><br>' +
             '<button onclick="location.reload()">Обновить страницу</button>';
         console.error(err);
@@ -80,9 +112,9 @@ async function loadData() {
 function showAnnouncements() {
     const container = document.getElementById('announcements');
     if (!container) return;
-    
+
     const general = allData.announcements.filter(a => !a.discipline);
-    
+
     general.forEach(a => {
         const div = document.createElement('div');
         div.className = 'announcement';
@@ -95,9 +127,9 @@ function showDisciplineAnnouncements(discipline) {
     const container = document.getElementById('disciplineAnnouncements');
     if (!container) return;
     container.innerHTML = '';
-    
+
     const list = allData.announcements.filter(a => a.discipline === discipline);
-    
+
     list.forEach(a => {
         const div = document.createElement('div');
         div.className = 'announcement';
@@ -112,7 +144,10 @@ function showDisciplineAnnouncements(discipline) {
 
 function populateGroups() {
     const select = document.getElementById('groupSelect');
-    
+
+    // Очищаем, чтобы не дублировать при повторном вызове
+    select.innerHTML = '<option value="">— Выберите —</option>';
+
     allData.groups.forEach(g => {
         const option = document.createElement('option');
         option.value = g;
@@ -132,7 +167,7 @@ function restoreUserData() {
 function getSelectedGroup() {
     const select = document.getElementById('groupSelect');
     const other = document.getElementById('groupOther');
-    
+
     if (select.value === 'Другая' && other.value.trim()) {
         return other.value.trim();
     }
@@ -165,30 +200,34 @@ function updateContinueBtn() {
 document.getElementById('continueBtn').addEventListener('click', function() {
     const fio = document.getElementById('fio').value.trim();
     const group = getSelectedGroup();
-    
+
     if (!fio || !group) {
         showMessage('❌ Заполните все поля', 'error');
         return;
     }
-    
+
     userData.fio = fio;
     userData.group = group;
-    
-    // ⚠️ sessionStorage вместо localStorage
+
     sessionStorage.setItem('pereeks_user', JSON.stringify(userData));
-    
+
     goToStep2();
 });
 
-// ⚠️ НОВАЯ КНОПКА: посмотреть записи без записи
 document.getElementById('checkOnlyBtn').addEventListener('click', function() {
     const fio = document.getElementById('fio').value.trim();
-    
+    const parts = fio.split(/\s+/).filter(p => p.length > 0);
+
     if (!fio) {
         showMessage('❌ Введите ФИО', 'error');
         return;
     }
-    
+
+    if (parts.length < 3) {
+        showMessage('❌ Введите полное ФИО (Фамилия Имя Отчество)', 'error');
+        return;
+    }
+
     findRecordsByFio(fio);
 });
 
@@ -201,17 +240,22 @@ function goToStep2() {
     document.getElementById('step3').style.display = 'none';
     document.getElementById('step4').style.display = 'none';
     document.getElementById('step2').style.display = 'block';
-    
-    document.getElementById('userInfo').textContent = 
+
+    document.getElementById('userInfo').textContent =
         userData.fio + ' | ' + userData.group;
-    
+
+    // Сброс выбранной дисциплины
+    currentDiscipline = null;
+    document.getElementById('disciplineSelect').value = '';
+    hideDisciplineInfo();
+
     populateDisciplines();
 }
 
 function populateDisciplines() {
     const select = document.getElementById('disciplineSelect');
     select.innerHTML = '<option value="">— Выберите —</option>';
-    
+
     allData.disciplines.forEach(d => {
         const option = document.createElement('option');
         option.value = d.name;
@@ -223,20 +267,20 @@ function populateDisciplines() {
 document.getElementById('disciplineSelect').addEventListener('change', function() {
     const discipline = this.value;
     currentDiscipline = discipline;
-    
+
     if (!discipline) {
         hideDisciplineInfo();
         return;
     }
-    
+
     const disc = allData.disciplines.find(d => d.name === discipline);
     if (!disc) {
         hideDisciplineInfo();
         return;
     }
-    
-    const isActive = allData.activeDisciplines.some(d => d.name === discipline);
-    
+
+    const isActive = isDisciplineActive(discipline);
+
     if (isActive) {
         showActiveDiscipline(disc);
     } else {
@@ -246,32 +290,32 @@ document.getElementById('disciplineSelect').addEventListener('change', function(
 
 function showActiveDiscipline(disc) {
     const infoBlock = document.getElementById('disciplineInfo');
-    infoBlock.innerHTML = 
-        '🕐 <b>Время:</b> ' + (disc.time || '—') + '<br>' +
-        '📅 <b>Дни:</b> ' + (disc.days && disc.days.length ? disc.days.join(', ') : '—') + '<br>' +
-        '📌 <b>Запись открыта до:</b> ' + disc.endDate;
+    infoBlock.innerHTML =
+        '🕐 <b>Время:</b> ' + escapeHtml(disc.time || '—') + '<br>' +
+        '📅 <b>Дни:</b> ' + (disc.days && disc.days.length ? escapeHtml(disc.days.join(', ')) : '—') + '<br>' +
+        '📌 <b>Запись открыта до:</b> ' + escapeHtml(disc.endDate);
     infoBlock.style.display = 'block';
-    
+
     showDisciplineAnnouncements(disc.name);
-    
+
     const btn = document.getElementById('registerBtn');
     btn.style.display = 'block';
     btn.disabled = false;
     btn.textContent = 'Записаться';
-    
+
     document.getElementById('closedMessage').style.display = 'none';
 }
 
 function showClosedDiscipline(disc) {
     const infoBlock = document.getElementById('disciplineInfo');
     infoBlock.style.display = 'none';
-    
+
     const closedBlock = document.getElementById('closedMessage');
-    closedBlock.innerHTML = 
-        '<div class="closed-title">✅ Запись завершена ' + disc.endDate + '</div>' +
+    closedBlock.innerHTML =
+        '<div class="closed-title">✅ Запись завершена ' + escapeHtml(disc.endDate) + '</div>' +
         '<div>Ожидайте распределения.<br>Следите за объявлениями.</div>';
     closedBlock.style.display = 'block';
-    
+
     document.getElementById('registerBtn').style.display = 'none';
     document.getElementById('disciplineAnnouncements').innerHTML = '';
 }
@@ -292,13 +336,13 @@ document.getElementById('registerBtn').addEventListener('click', async function(
         showMessage('❌ Выберите дисциплину', 'error');
         return;
     }
-    
+
     const btn = this;
     btn.disabled = true;
     btn.textContent = 'Отправка...';
-    
+
     showMessage('⏳ Отправляем запись...', 'info');
-    
+
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
@@ -312,25 +356,25 @@ document.getElementById('registerBtn').addEventListener('click', async function(
                 discipline: currentDiscipline
             })
         });
-        
+
         const text = await response.text();
         let result;
-        
+
         try {
             result = JSON.parse(text);
         } catch (e) {
             console.error('Ответ не JSON:', text.substring(0, 300));
             throw new Error('Сервер временно недоступен. Попробуйте через минуту.');
         }
-        
+
         if (result.success) {
             document.getElementById('step2').style.display = 'none';
             document.getElementById('step3').style.display = 'block';
-            
+
             document.getElementById('successFio').textContent = userData.fio;
             document.getElementById('successGroup').textContent = userData.group;
             document.getElementById('successDiscipline').textContent = currentDiscipline;
-            
+
         } else if (result.duplicate) {
             showMessage('⚠️ Вы уже записаны на эту дисциплину', 'info');
             btn.disabled = false;
@@ -340,7 +384,7 @@ document.getElementById('registerBtn').addEventListener('click', async function(
             btn.disabled = false;
             btn.textContent = 'Записаться';
         }
-        
+
     } catch (err) {
         console.error('Ошибка:', err);
         showMessage('❌ ' + err.message, 'error');
@@ -357,34 +401,33 @@ document.getElementById('anotherBtn').addEventListener('click', function() {
     currentDiscipline = null;
     document.getElementById('disciplineSelect').value = '';
     hideDisciplineInfo();
-    
+
     document.getElementById('step3').style.display = 'none';
     document.getElementById('step2').style.display = 'block';
     document.getElementById('message').textContent = '';
 });
 
-document.getElementById('checkMyBtn').addEventListener('click', function() {
-    if (userData.fio && userData.group) {
-        goToStep4(userData.fio, userData.group);
+['checkMyBtn', 'checkMyBtn2'].forEach(function(id) {
+    const btn = document.getElementById(id);
+    if (btn) {
+        btn.addEventListener('click', function() {
+            if (userData.fio && userData.group) {
+                goToStep4(userData.fio, userData.group);
+            }
+        });
     }
 });
 
-document.getElementById('checkMyBtn2').addEventListener('click', function() {
-    if (userData.fio && userData.group) {
-        goToStep4(userData.fio, userData.group);
+['editUserBtn', 'editUserBtn2'].forEach(function(id) {
+    const btn = document.getElementById(id);
+    if (btn) {
+        btn.addEventListener('click', function() {
+            document.getElementById('step2').style.display = 'none';
+            document.getElementById('step4').style.display = 'none';
+            document.getElementById('step1').style.display = 'block';
+            document.getElementById('message').textContent = '';
+        });
     }
-});
-
-document.getElementById('editUserBtn').addEventListener('click', function() {
-    document.getElementById('step2').style.display = 'none';
-    document.getElementById('step1').style.display = 'block';
-    document.getElementById('message').textContent = '';
-});
-
-document.getElementById('editUserBtn2').addEventListener('click', function() {
-    document.getElementById('step4').style.display = 'none';
-    document.getElementById('step1').style.display = 'block';
-    document.getElementById('message').textContent = '';
 });
 
 // ============================================================
@@ -396,13 +439,13 @@ async function goToStep4(fio, group) {
     document.getElementById('step2').style.display = 'none';
     document.getElementById('step3').style.display = 'none';
     document.getElementById('step4').style.display = 'block';
-    
-    document.getElementById('userInfo2').textContent = 
+
+    document.getElementById('userInfo2').textContent =
         fio + (group ? ' | ' + group : '');
-    
-    document.getElementById('myRecords').innerHTML = 
+
+    document.getElementById('myRecords').innerHTML =
         '<div class="loading">Поиск записей...</div>';
-    
+
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
@@ -415,42 +458,44 @@ async function goToStep4(fio, group) {
                 group: group || ''
             })
         });
-        
+
         const text = await response.text();
         let result;
-        
+
         try {
             result = JSON.parse(text);
         } catch (e) {
             console.error('Ответ не JSON:', text.substring(0, 300));
             throw new Error('Сервер временно недоступен');
         }
-        
+
         if (result.success && result.found) {
             renderRecords(result.records);
-        } else {
-            document.getElementById('myRecords').innerHTML = 
+        } else if (result.success && !result.found) {
+            document.getElementById('myRecords').innerHTML =
                 '<div class="loading">Записей не найдено</div>';
+        } else {
+            document.getElementById('myRecords').innerHTML =
+                '<div class="loading">❌ ' + escapeHtml(result.error || 'Ошибка') + '</div>';
         }
-        
+
     } catch (err) {
-        document.getElementById('myRecords').innerHTML = 
-            '<div class="loading">❌ ' + err.message + '</div>';
+        document.getElementById('myRecords').innerHTML =
+            '<div class="loading">❌ ' + escapeHtml(err.message) + '</div>';
     }
 }
 
-// ⚠️ Поиск по ФИО без группы
 async function findRecordsByFio(fio) {
     document.getElementById('step1').style.display = 'none';
     document.getElementById('step2').style.display = 'none';
     document.getElementById('step3').style.display = 'none';
     document.getElementById('step4').style.display = 'block';
-    
+
     document.getElementById('userInfo2').textContent = fio;
-    
-    document.getElementById('myRecords').innerHTML = 
+
+    document.getElementById('myRecords').innerHTML =
         '<div class="loading">Поиск записей...</div>';
-    
+
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
@@ -462,98 +507,101 @@ async function findRecordsByFio(fio) {
                 fio: fio
             })
         });
-        
+
         const text = await response.text();
         let result;
-        
+
         try {
             result = JSON.parse(text);
         } catch (e) {
             throw new Error('Сервер временно недоступен');
         }
-        
+
         if (result.success && result.found) {
             renderRecords(result.records);
-        } else {
-            document.getElementById('myRecords').innerHTML = 
+        } else if (result.success && !result.found) {
+            document.getElementById('myRecords').innerHTML =
                 '<div class="loading">Записей не найдено</div>';
+        } else {
+            document.getElementById('myRecords').innerHTML =
+                '<div class="loading">❌ ' + escapeHtml(result.error || 'Ошибка') + '</div>';
         }
-        
+
     } catch (err) {
-        document.getElementById('myRecords').innerHTML = 
-            '<div class="loading">❌ ' + err.message + '</div>';
+        document.getElementById('myRecords').innerHTML =
+            '<div class="loading">❌ ' + escapeHtml(err.message) + '</div>';
     }
 }
 
 function renderRecords(records) {
     const container = document.getElementById('myRecords');
     container.innerHTML = '';
-    
+
     if (records.length === 0) {
         container.innerHTML = '<div class="loading">Записей не найдено</div>';
         return;
     }
-    
+
     records.forEach(r => {
         const div = document.createElement('div');
-        div.className = 'record-card status-' + 
-            (r.status || 'напроверке').toLowerCase().replace(/\s+/g, '');
-        
+        const statusClass = (r.status || 'напроверке').toLowerCase().replace(/\s+/g, '');
+        div.className = 'record-card status-' + statusClass;
+
         let details = '';
-        
+
         let statusText = r.status || 'На проверке';
         let statusIcon = '⏳';
         if (statusText === 'Записан') statusIcon = '🟢';
         else if (statusText === 'Не записан') statusIcon = '🔴';
         else if (statusText === 'Не допущен') statusIcon = '❌';
-        
+
         if (r.day && r.time) {
-            details += '📅 <b>День:</b> ' + r.day + '<br>';
-            details += '🕐 <b>Время:</b> ' + r.time;
+            details += '📅 <b>День:</b> ' + escapeHtml(r.day) + '<br>';
+            details += '🕐 <b>Время:</b> ' + escapeHtml(r.time);
         } else if (statusText === 'Записан') {
             details += '📅 День и время будут назначены';
         }
-        
+
         let commentHtml = '';
         if (r.comment) {
-            commentHtml = '<div class="record-comment">💬 ' + r.comment + '</div>';
+            commentHtml = '<div class="record-comment">💬 ' + escapeHtml(r.comment) + '</div>';
         }
-        
+
         let extraStatus = '';
         if (r.status2) {
             let s2Icon = '⏳';
             if (r.status2 === 'Сдал') s2Icon = '✅';
             else if (r.status2 === 'Не сдал') s2Icon = '❌';
-            extraStatus = '<div class="record-status">📝 <b>Лейко-формула:</b> ' + 
-                          s2Icon + ' ' + r.status2 + '</div>';
+            extraStatus = '<div class="record-status">📝 <b>Лейко-формула:</b> ' +
+                          s2Icon + ' ' + escapeHtml(r.status2) + '</div>';
         }
-        
+
         let groupHtml = '';
         if (r.group) {
-            groupHtml = '<div class="record-group">👥 ' + r.group + '</div>';
+            groupHtml = '<div class="record-group">👥 ' + escapeHtml(r.group) + '</div>';
         }
-        
-        div.innerHTML = 
-            '<div class="record-discipline">📚 ' + r.discipline + '</div>' +
+
+        div.innerHTML =
+            '<div class="record-discipline">📚 ' + escapeHtml(r.discipline) + '</div>' +
             groupHtml +
-            '<div class="record-status"><b>Статус записи:</b> ' + statusIcon + ' ' + statusText + '</div>' +
+            '<div class="record-status"><b>Статус записи:</b> ' + statusIcon + ' ' + escapeHtml(statusText) + '</div>' +
             extraStatus +
             '<div class="record-details">' + details + '</div>' +
             commentHtml;
-        
+
         container.appendChild(div);
     });
 }
 
 document.getElementById('backBtn').addEventListener('click', function() {
     document.getElementById('step4').style.display = 'none';
-    
+
     if (userData.fio && userData.group) {
         document.getElementById('step2').style.display = 'block';
     } else {
         document.getElementById('step1').style.display = 'block';
     }
-    
+
     document.getElementById('message').textContent = '';
 });
 
@@ -565,6 +613,7 @@ function showMessage(text, type) {
     const msg = document.getElementById('message');
     msg.textContent = text;
     msg.className = type || '';
+    msg.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 // ============================================================
