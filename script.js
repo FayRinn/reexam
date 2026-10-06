@@ -63,15 +63,44 @@ function isDisciplineActive(disciplineName) {
 
 async function loadData() {
     try {
-        const response = await fetch(API_URL + '?action=getData');
-        const text = await response.text();
+        // ---- Кэш браузера на 5 минут ----
+        const CACHE_TTL = 5 * 60 * 1000; // 5 минут
+        const cachedRaw = sessionStorage.getItem('pereeks_data');
+        const cachedTime = sessionStorage.getItem('pereeks_data_time');
+        const now = Date.now();
 
         let data;
-        try {
-            data = JSON.parse(text);
-        } catch (e) {
-            console.error('Сервер вернул не JSON:', text.substring(0, 300));
-            throw new Error('Сервер временно недоступен. Обновите страницу.');
+
+        if (cachedRaw && cachedTime && (now - parseInt(cachedTime, 10)) < CACHE_TTL) {
+            try {
+                data = JSON.parse(cachedRaw);
+                console.log('📦 Данные из кэша браузера');
+            } catch (e) {
+                data = null;
+            }
+        }
+
+        // Если кэша нет или он битый — идём на сервер
+        if (!data) {
+            const response = await fetch(API_URL + '?action=getData');
+            const text = await response.text();
+
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error('Сервер вернул не JSON:', text.substring(0, 300));
+                throw new Error('Сервер временно недоступен. Обновите страницу.');
+            }
+
+            if (data.error) throw new Error(data.error);
+
+            // Сохраняем в кэш браузера
+            try {
+                sessionStorage.setItem('pereeks_data', JSON.stringify(data));
+                sessionStorage.setItem('pereeks_data_time', String(now));
+            } catch (e) {
+                // Если sessionStorage переполнен — не страшно
+            }
         }
 
         if (data.error) throw new Error(data.error);
